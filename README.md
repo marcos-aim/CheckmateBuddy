@@ -1,1 +1,1 @@
-# CheckmateBuddy
+# CheckmateBuddy :)

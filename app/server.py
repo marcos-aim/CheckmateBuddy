@@ -1,35 +1,70 @@
-from flask import Flask, render_template, request, redirect, session, jsonify, url_for
+import json
+from os import environ as env
+from urllib.parse import quote_plus, urlencode
+
+from authlib.integrations.flask_client import OAuth
+from dotenv import find_dotenv, load_dotenv
+from flask import Flask, redirect, render_template, session, url_for
+
+ENV_FILE = find_dotenv()
+if ENV_FILE:
+    load_dotenv(ENV_FILE)
 
 app = Flask(__name__)
+app.secret_key = env.get("APP_SECRET_KEY")
+REDIRECT_URL = env.get("REDIRECT_URL", "http://127.0.0.1:5000")
 
-@app.route('/')
-def index():
-    """
-    Redirect to /home if the user is logged in.
-    Otherwise, redirect to /start.
-    """
-    if 'profile' in session:
-        # User is logged in, redirect to /home
-        return redirect('/home')
-    else:
-        # User is not logged in, redirect to /start
-        return redirect('/start')
+oauth = OAuth(app)
 
-@app.route('/start')
-def start():
-    """
-    Render the starting page for users who are not logged in.
-    """
-    return render_template('start.html')
+oauth.register(
+    "auth0",
+    client_id=env.get("AUTH0_CLIENT_ID"),
+    client_secret=env.get("AUTH0_CLIENT_SECRET"),
+    client_kwargs={
+        "scope": "openid profile email",
+    },
+    server_metadata_url=f'https://{env.get("AUTH0_DOMAIN")}/.well-known/openid-configuration'
+)
 
-@app.route('/home')
+
+@app.route("/login")
+def login():
+    # Append /callback to the base redirect URL
+    redirect_url = f"{REDIRECT_URL}/callback"
+    return oauth.auth0.authorize_redirect(
+        redirect_uri=redirect_url
+    )
+
+
+
+@app.route("/callback", methods=["GET", "POST"])
+def callback():
+    token = oauth.auth0.authorize_access_token()
+    session["user"] = token
+    return redirect("/")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    print(url_for("home", _external=True))
+    return redirect(
+        "https://" + env.get("AUTH0_DOMAIN")
+        + "/v2/logout?"
+        + urlencode(
+            {
+                "returnTo": REDIRECT_URL,
+                "client_id": env.get("AUTH0_CLIENT_ID"),
+            },
+            quote_via=quote_plus,
+        )
+    )
+
+
+@app.route("/")
 def home():
-    """
-    Render the home page for logged-in users.
-    """
-    username = session['profile'].get('name', 'User')
-    return render_template('home.html', username=username)
+    return render_template("home.html", session=session.get('user'), pretty=json.dumps(session.get('user'), indent=4))
 
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

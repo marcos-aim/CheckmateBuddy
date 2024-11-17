@@ -1,4 +1,5 @@
 import json
+import copy
 import time
 import threading
 from os import environ as env
@@ -18,6 +19,12 @@ from model_data_processor import numeric_board
 # Load the model
 loaded_model = load_model("app/chess_model.h5")
 loaded_move_encoder = joblib.load("app/move_encoder.pkl")
+global moves
+global myTurn
+global gameStarted
+gameStarted = False
+myTurn = False
+moves = 0
 
 app = Flask(__name__)
 
@@ -57,6 +64,7 @@ def cleanup_inactive_sessions():
             last_active.pop(user_id, None)
         time.sleep(300)  # Run cleanup every 5 minutes
 
+board = chess.Board()
 # Start cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_inactive_sessions, daemon=True)
 cleanup_thread.start()
@@ -132,37 +140,75 @@ def play_specific_move():
     except ValueError:
         return jsonify({"status": "invalid"})
 
+@app.route("/readyP", methods=["POST"])
+def ready():
+    global gameStarted 
+    gameStarted = True # Set the global variable to True
+    return jsonify(success=True, state=gameStarted)
+
 @app.route("/move", methods=["POST"])
 def make_move():
-    """Handle a user move and make a prediction or Stockfish move."""
-    user_id = session.get("user_id")
-    last_active[user_id] = time.time()  # Update last active time
-
-    if user_id not in boards:
-        boards[user_id] = chess.Board()  # Initialize board for the user
-    board = boards[user_id]
-
+    global board, gameStarted, moves
+    #if not gameStarted:
+        #return jsonify("not ready to play")
     data = request.json
-    source = data.get("from")
-    target = data.get("to")
+    source = data.get("from")  # Source square
+    target = data.get("to")    # Target square
+    fen = data.get("fen")
 
     try:
+        print(fen)
         move = chess.Move.from_uci(f"{source}{target}")
         if move in board.legal_moves:
             board.push(move)
+
+            print(move)
             if board.is_checkmate():
                 return jsonify({"status": "checkmate", "board": board.fen()})
 
-            test_board = numeric_board(board)
-            test_board_expanded = np.expand_dims(test_board, axis=(0, -1))
+            test_board = numeric_board(board)  # Use the first numeric board as an example
+            test_board_expanded = np.expand_dims(test_board, axis=(0, -1))  # Expand dims for batch and channels
+            #print(test_board)
+            #print(test_board_expanded);
             predictions = loaded_model.predict(test_board_expanded)
             predicted_move_idx = np.argmax(predictions)
             predicted_move = loaded_move_encoder.inverse_transform([predicted_move_idx])
 
-            stock_move = stockfish_engine.play(board, chess.engine.Limit(time=0.1)).move
-            board.push(stock_move)
+            print(f"Predicted Move: {predicted_move[0]}")
+            print(f"Confidence: {predictions[0, predicted_move_idx]:.2f}")
+            roll = (1 - (moves/25) + np.random.rand() + predictions[0, predicted_move_idx] / 4);  
 
-            return jsonify({"status": "success", "board": board.fen()})
+            stock_move = stockfish_engine.play(board, chess.engine.Limit(time=0.1)).move
+            print(stock_move)
+            moves += 1
+            print(roll)
+
+        
+            #return jsonify({"status": "success", "board": board.fen()})
+
+
+            eng_move = chess.Move.from_uci(predicted_move[0])
+            print(eng_move)
+            board2 = copy.deepcopy(board)
+            board2.push(eng_move)
+            score1 = stockfish_engine.analyse(board,chess.engine.Limit(time=0.1))["score"]
+            score2 = stockfish_engine.analyse(board2,chess.engine.Limit(time=0.1))["score"]
+
+
+            difference = score1.white().score() - score2.white().score()
+            if eng_move in board.legal_moves and roll > 0.8 and abs(difference) < 100:
+                board.push(eng_move)
+                if board.is_checkmate():
+                    return jsonify({"status": "checkmate", "board": board.fen()})
+
+                return jsonify({"status": "success", "board": board.fen()})
+            else:
+                board.push(stock_move)
+                if board.is_checkmate():
+                    return jsonify({"status": "checkmate", "board": board.fen()})
+                return jsonify({"status": "success", "board": board.fen()})
+
+
         else:
             return jsonify({"status": "illegal"})
     except ValueError:
@@ -175,6 +221,13 @@ def reset_board():
     last_active[user_id] = time.time()  # Update last active time
     boards[user_id] = chess.Board()  # Reset user's board
     return jsonify({"status": "success"})
+
+
+@app.route('/update_dropdown', methods=['POST'])
+def update_dropdown():
+    global myTurn
+    selected_option = request.json.get('selected_option', '')
+    return jsonify(success=True)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

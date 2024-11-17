@@ -3,7 +3,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 
-def train_model2(numeric_boards, moves):
+def train_model(numeric_boards, moves):
     """
     Trains a deeper CNN model to predict the next move based on the numeric board states.
 

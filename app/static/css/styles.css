@@ -1,6 +1,7 @@
 /* styles.css */
 body {
-    margin: 0;
+    padding: 50px, 50px;
+    margin: 50px;
     font-family: 'Comic Sans MS', sans-serif; /* Fun, lighthearted font */
     background-color: #f7e7ce; /* Cashmere-like background */
     color: #5a4a1a; /* Deep tan text */
@@ -42,6 +43,7 @@ body {
 }
 
 .main-container {
+  margin-top: 40px;
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -101,8 +103,9 @@ body {
 }
 
 .button_container {
+  transform: scale(2);
   display: flex;
-  justify-content: center;
+  justify-content: ceter;
   align-items: center;
   height: 100px;
 }

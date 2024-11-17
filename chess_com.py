@@ -16,12 +16,7 @@ def fetch_games(username, year, month):
     if response.status_code == 200:
        print("Succesfully fetched data")
        games = response.json()
-       _, year, month = url.split("/")[-3:]
-       filename = f"{year}-{month}.json"
-       filepath = os.path.join(output_dir, filename)
-       with open(filepath, "w") as file:
-           json.dump(games, file, indent=4)
-           print(f"Downloaded games saved to {filepath}")
+       return games
     else:
         print(f"Failed to fetch games from {username}. Status code: {response.status_code}")
 

@@ -1,7 +1,7 @@
 import random
 
-from app.model import train_model
-from app.model_data_processor import fetch_boards_until_limit
+from model import train_model
+from model_data_processor import fetch_boards_until_limit
 
 
 def validate_time_control(time_control):
@@ -54,3 +54,5 @@ def train_chess_model(username, time_control, color, target_samples=10000, max_m
     model, accuracy = train_model(all_numeric_boards, all_moves)
 
     print("Model training completed.")
+
+    return model, accuracy

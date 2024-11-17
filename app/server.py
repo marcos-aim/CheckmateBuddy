@@ -1,5 +1,6 @@
 import json
 import copy
+import random
 import time
 import threading
 from os import environ as env
@@ -14,6 +15,7 @@ import joblib
 from tensorflow.keras.models import load_model
 import chess
 
+from model_io import train_chess_model
 from model_data_processor import numeric_board
 
 # Load the model
@@ -48,6 +50,9 @@ oauth.register(
 
 # Board and session management
 boards = {}
+current_opponent_username = {}
+current_color = {}
+current_model = {}
 last_active = {}
 SESSION_TIMEOUT = 3600  # Timeout in seconds (e.g., 1 hour)
 
@@ -116,6 +121,43 @@ def home():
     last_active[user_id] = time.time()  # Update last active time
     return render_template("index.html", session=session.get("user"), pretty=json.dumps(session.get("user"), indent=4))
 
+
+@app.route("/submit_username", methods=["POST"])
+def submit_username():
+    """
+    Submit a username for training and set the session details.
+    Expects JSON payload: {"username": "opponent_username"}
+    """
+    data = request.get_json()
+    username = data.get('username')
+
+    if not username:
+        return jsonify({"error": "Missing 'username' in request data"}), 400
+
+    user_id = session["user_id"]
+    last_active[user_id] = time.time()  # Update last active time
+
+    # Fetch the current color for the session, or default to "random"
+    color = current_color.get(user_id, "random")
+
+    if color == "random":
+        color = random.choice(["white", "black"])
+        current_color[user_id] = color  # Update session color if random is chosen
+
+    # Set the opponent username for the session
+    current_opponent_username[user_id] = username
+
+    print(f"Training model for username: {username}, color: {color}")
+
+    # Call the training function
+    try:
+        model, accuracy = train_chess_model(username, "blitz", "black", target_samples=10000, max_months=12)
+        current_model[user_id] = model
+        return jsonify({"message": f"Model trained successfully for {username} as {color}", "accuracy": accuracy})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/play_move", methods=["POST"])
 def play_specific_move():
     """Handle a specific move by the user."""
@@ -142,12 +184,13 @@ def play_specific_move():
 
 @app.route("/readyP", methods=["POST"])
 def ready():
-    global gameStarted 
+    global gameStarted
     gameStarted = True # Set the global variable to True
     return jsonify(success=True, state=gameStarted)
 
 @app.route("/move", methods=["POST"])
 def make_move():
+    user_id = session.get("user_id")
     global board, gameStarted, moves
     #if not gameStarted:
         #return jsonify("not ready to play")
@@ -170,20 +213,22 @@ def make_move():
             test_board_expanded = np.expand_dims(test_board, axis=(0, -1))  # Expand dims for batch and channels
             #print(test_board)
             #print(test_board_expanded);
+            loaded_model = current_model[user_id]
+            loaded_move_encoder = current_model[user_id].move_encoder
             predictions = loaded_model.predict(test_board_expanded)
             predicted_move_idx = np.argmax(predictions)
             predicted_move = loaded_move_encoder.inverse_transform([predicted_move_idx])
 
             print(f"Predicted Move: {predicted_move[0]}")
             print(f"Confidence: {predictions[0, predicted_move_idx]:.2f}")
-            roll = (1 - (moves/25) + np.random.rand() + predictions[0, predicted_move_idx] / 4);  
+            roll = (1 - (moves/25) + np.random.rand() + predictions[0, predicted_move_idx] / 4);
 
             stock_move = stockfish_engine.play(board, chess.engine.Limit(time=0.1)).move
             print(stock_move)
             moves += 1
             print(roll)
 
-        
+
             #return jsonify({"status": "success", "board": board.fen()})
 
 

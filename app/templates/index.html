@@ -78,16 +78,42 @@
           <label for="userInput">Enter a chess.com username:</label>
           <input type="text" id="userInput" placeholder="Type something...">
           <button id="saveButton">Select</button>
-          <script>
-          // JavaScript to save user input to a variable
-          let savedValue = "";
 
-          document.getElementById("saveButton").addEventListener("click", function() {
-            const userInput = document.getElementById("userInput").value;
-            savedValue = userInput; // Save the input value to the variable
-            document.getElementById("output").innerText = "Saved value: " + savedValue;
-          });
-          </script>
+<script>
+  document.getElementById("saveButton").addEventListener("click", function () {
+    const userInput = document.getElementById("userInput").value;
+
+    if (!userInput) {
+      document.getElementById("output").innerText = "Please enter a username.";
+      return;
+    }
+      board.start();
+      board.position(board.position());
+      location.reload();
+
+    // Send POST request to the server
+    fetch("/submit_username", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username: userInput }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.error) {
+          // Handle error
+          document.getElementById("output").innerText = `Error: ${data.error}`;
+        } else {
+          // Handle success
+          document.getElementById("output").innerText = `Success: ${data.message}`;
+        }
+      })
+      .catch((error) => {
+        document.getElementById("output").innerText = `Error: ${error.message}`;
+      });
+  });
+</script>
 
         </div>
         <div class="image-dropdown">

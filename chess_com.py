@@ -23,6 +23,6 @@ def fetch_games(username, year, month):
 
 
 def main():
-    fetch_games("magnuscarlsen","2014","12")
+    print(fetch_games("marcosaim","2024","11")["games"][1])
 
 main()

@@ -2,6 +2,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 
 from model_data_processor import fetch_boards_until_limit
 
@@ -57,7 +58,7 @@ def train_model(numeric_boards, moves):
     # Save the label encoder for move decoding
     model.move_encoder = move_encoder
 
-    return model
+    return model, accuracy
 
 
 def main():
@@ -65,22 +66,40 @@ def main():
     time_control = "blitz"
     color = "black"
 
-    # Fetch training data
-    numeric_boards, moves = fetch_boards_until_limit(username, time_control, color)
-    print(f"Number of training samples: {len(numeric_boards)}")
+    # Variables to store results
+    sample_sizes = list(range(1000, 15001, 1000))  # Start from 1,000 and go up to 60,000 in steps of 5,000
+    accuracies = []
+    confidences = []
 
-    # Train the model
-    model = train_model(numeric_boards, moves)
+    for target_samples in sample_sizes:
+        # Fetch training data
+        numeric_boards, moves = fetch_boards_until_limit(username, time_control, color, target_samples=target_samples)
+        print(f"Number of training samples: {len(numeric_boards)}")
 
-    # Example prediction
-    test_board = numeric_boards[0]  # Use the first numeric board as an example
-    test_board_expanded = np.expand_dims(test_board, axis=(0, -1))  # Expand dims for batch and channels
-    predictions = model.predict(test_board_expanded)
-    predicted_move_idx = np.argmax(predictions)
-    predicted_move = model.move_encoder.inverse_transform([predicted_move_idx])
+        # Train the model
+        model, accuracy = train_model(numeric_boards, moves)
+        accuracies.append(accuracy)
 
-    print(f"Predicted Move: {predicted_move[0]}")
-    print(f"Confidence: {predictions[0, predicted_move_idx]:.2f}")
+        # Test confidence on the first test board
+        test_board = numeric_boards[0]  # Use the first numeric board as an example
+        test_board_expanded = np.expand_dims(test_board, axis=(0, -1))  # Expand dims for batch and channels
+        predictions = model.predict(test_board_expanded)
+        predicted_move_idx = np.argmax(predictions)
+        confidence = predictions[0, predicted_move_idx]
+        confidences.append(confidence)
+
+        print(f"Target Samples: {target_samples}, Test Accuracy: {accuracy * 100:.2f}%, Confidence: {confidence:.2f}")
+
+    # Plot accuracy and confidence
+    plt.figure(figsize=(10, 6))
+    plt.plot(sample_sizes, accuracies, label="Accuracy", marker='o')
+    plt.plot(sample_sizes, confidences, label="Confidence", marker='x')
+    plt.xlabel("Number of Training Samples")
+    plt.ylabel("Metric Value")
+    plt.title("Accuracy and Confidence vs. Training Samples")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 
 if __name__ == "__main__":

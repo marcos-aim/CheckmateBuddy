@@ -1,9 +1,8 @@
 import io
 from chess.pgn import read_game
-import chess
 import matplotlib.pyplot as plt
 import numpy as np
-from model_data_processor import fetch_boards_until_limit, fetch_games, numeric_board
+from app.model_data_processor import fetch_boards_until_limit, fetch_games, numeric_board
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 import tensorflow as tf

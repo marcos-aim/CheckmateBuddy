@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 
-from model_data_processor import fetch_boards_until_limit
+from app.model_data_processor import fetch_boards_until_limit
 
 
 def train_model(numeric_boards, moves):

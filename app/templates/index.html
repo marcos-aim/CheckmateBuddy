@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>CheckmateBuddy</title>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/chessboard-1.0.0.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+        <script src="{{ url_for('static', filename='js/chessboard-1.0.0.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/chess.js') }}"></script>
+        <style>
+        #board { margin: 20px auto; }
+        #reset { display: block; margin: 20px auto; }
+    </style>
+  </head>
+  <body>
+      <div class="menu-bar">
+    <div class="menu-bar-content">
+      <div class="logo">CheckmateBuddy</div>
+      <div class="profile-button"><a href="/login">Login</a></div>
+    </div>
+  </div>
+      <div class="main-container">
+        <div class="chessboard",style="width: 600px">
+        <div id="board" style="width: 600px"></div>
+
+
+        <script>
+        const board = Chessboard('board', {
+            draggable: true,
+            position: 'start',
+            onDrop: (source, target, piece, newPos, oldPos, orientation) => {
+                var fen = board.fen();
+                // Send move to server
+                fetch('/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ from: source, to: target, fen: fen })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === "success" || data.status === "checkmate") {
+                        board.position(data.board);  // Update board position
+                    }// else {
+                        //alert("Illegal move");
+                      //  board.position(oldPos);  // Revert to old position
+                    //}
+                });
+                //return data.status === "success" ? "": 'snapback';
+            
+            /*fetch('/update_fen', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ fen: fen })
+            })
+              .then(response => response.json())
+              .then(data => {
+                console.log('Response from Flask:', data);
+              })
+              .catch(error => console.error('Error:', error));
+          });
+*/
+                return 'snapback';  // Snap back pieces until server validates
+            }
+        });
+
+        document.getElementById('ready').addEventListener('click', () => {
+            fetch('/ready', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    //board.start();
+                    board.position(data.board);  // Update board position
+                    alert("ready to play");
+                }
+            });
+        });
+    </script>
+    </div>
+      <div class="button_container"><button id="play" style="margin-top: 300px;">Play</button></div>
+    <div class="side-panel">
+      <div class="image-dropdown">
+        <img src="https://via.placeholder.com/100" alt="Image 1">
+        <select>
+          <option value="1">Option 1</option>
+          <option value="2">Option 2</option>
+          <option value="3">Option 3</option>
+        </select>
+      </div>
+      <div class="vs-text">VS</div>
+      <div class="image-dropdown">
+        <img src="https://via.placeholder.com/100" alt="Image 2">
+        <select>
+          <option value="1">Option 1</option>
+          <option value="2">Option 2</option>
+          <option value="3">Option 3</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  </body>
+</html>
+<html lang="en">
+

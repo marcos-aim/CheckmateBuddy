@@ -19,10 +19,3 @@ def fetch_games(username, year, month):
        return games
     else:
         print(f"Failed to fetch games from {username}. Status code: {response.status_code}")
-
-
-
-def main():
-    print(fetch_games("marcosaim","2024","11")["games"][1])
-
-main()

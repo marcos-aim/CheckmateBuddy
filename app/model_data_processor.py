@@ -140,22 +140,3 @@ def fetch_boards_until_limit(username, time_control, color, target_samples=10000
         print(f"Warning: Only {len(all_numeric_boards)} boards collected. Target was {target_samples}.")
 
     return all_numeric_boards, all_moves
-
-
-def main():
-    username = "marcosaim"
-    time_control = "blitz"
-    color = "black"
-
-    numeric_boards, moves = fetch_boards_until_limit(username, time_control, color)
-    print(f"Total Numeric Boards: {len(numeric_boards)}")
-    print(f"Total Moves: {len(moves)}")
-
-    if numeric_boards:
-        print("Example Numeric Board:")
-        print(numeric_boards[0])
-        print("Example Move:", moves[0])
-
-
-if __name__ == "__main__":
-    main()

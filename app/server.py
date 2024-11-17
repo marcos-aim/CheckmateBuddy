@@ -1,19 +1,21 @@
 import json
+import time
+import threading
 from os import environ as env
 from urllib.parse import quote_plus, urlencode
-import threading
-import time
+
+from authlib.integrations.flask_client import OAuth
+from dotenv import find_dotenv, load_dotenv
+from flask import Flask, redirect, render_template, session, request, jsonify, url_for
+import chess.engine
 import numpy as np
 import joblib
 from tensorflow.keras.models import load_model
 import chess
-import chess.engine
-from flask import Flask, redirect, render_template, session, request, jsonify, url_for
-from dotenv import find_dotenv, load_dotenv
-from authlib.integrations.flask_client import OAuth
+
 from model_data_processor import numeric_board
 
-# Load the model and move encoder
+# Load the model
 loaded_model = load_model("app/chess_model.h5")
 loaded_move_encoder = joblib.load("app/move_encoder.pkl")
 
@@ -36,59 +38,52 @@ oauth.register(
     server_metadata_url=f'https://{env.get("AUTH0_DOMAIN")}/.well-known/openid-configuration'
 )
 
-# Dictionary to manage boards for each user and their last access time
+# Dictionary to manage boards and timestamps for each user
 boards = {}
+last_active = {}
+SESSION_TIMEOUT = 3600  # Timeout in seconds (e.g., 1 hour)
 
-# Expiration settings
-EXPIRATION_TIME = 3600  # 1 hour in seconds
-
-
-def cleanup_boards():
-    """Periodic cleanup of expired boards."""
+def cleanup_inactive_sessions():
     while True:
         current_time = time.time()
-        keys_to_delete = []
-        for user_id, data in boards.items():
-            last_access_time = data['last_access']
-            if current_time - last_access_time > EXPIRATION_TIME:
-                keys_to_delete.append(user_id)
-
-        for key in keys_to_delete:
-            del boards[key]
-
+        to_remove = [
+            user_id for user_id, last_time in last_active.items()
+            if current_time - last_time > SESSION_TIMEOUT
+        ]
+        for user_id in to_remove:
+            boards.pop(user_id, None)
+            last_active.pop(user_id, None)
         time.sleep(300)  # Run cleanup every 5 minutes
 
-
 # Start the cleanup thread
-cleanup_thread = threading.Thread(target=cleanup_boards, daemon=True)
+cleanup_thread = threading.Thread(target=cleanup_inactive_sessions, daemon=True)
 cleanup_thread.start()
-
 
 def create_stockfish_engine(elo):
     engine = chess.engine.SimpleEngine.popen_uci("app/stockfish/stockfish-windows-x86-64-vnni512.exe")
     engine.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
     return engine
 
-
 stockfish_engine = create_stockfish_engine(1700)
-
 
 @app.route("/")
 def home():
     if "user_id" not in session:
+        # Generate a unique ID for non-logged-in users
         session["user_id"] = str(time.time()) + "-" + str(np.random.randint(1000))
+    user_id = session["user_id"]
+    last_active[user_id] = time.time()  # Update last active time
     return render_template("index.html", session=session.get("user"), pretty=json.dumps(session.get("user"), indent=4))
-
 
 @app.route("/play_move", methods=["POST"])
 def play_specific_move():
     user_id = session.get("user_id")
-    if user_id not in boards:
-        boards[user_id] = {"board": chess.Board(), "last_access": time.time()}
-    else:
-        boards[user_id]["last_access"] = time.time()
+    last_active[user_id] = time.time()  # Update last active time
 
-    board = boards[user_id]["board"]
+    if user_id not in boards:
+        boards[user_id] = chess.Board()  # Initialize board for user
+    board = boards[user_id]
+
     data = request.json
     move_string = data.get("move")  # Example: "e2e4"
     try:
@@ -103,16 +98,15 @@ def play_specific_move():
     except ValueError:
         return jsonify({"status": "invalid"})
 
-
 @app.route("/move", methods=["POST"])
 def make_move():
     user_id = session.get("user_id")
-    if user_id not in boards:
-        boards[user_id] = {"board": chess.Board(), "last_access": time.time()}
-    else:
-        boards[user_id]["last_access"] = time.time()
+    last_active[user_id] = time.time()  # Update last active time
 
-    board = boards[user_id]["board"]
+    if user_id not in boards:
+        boards[user_id] = chess.Board()  # Initialize board for user
+    board = boards[user_id]
+
     data = request.json
     source = data.get("from")
     target = data.get("to")
@@ -139,13 +133,12 @@ def make_move():
     except ValueError:
         return jsonify({"status": "invalid"})
 
-
 @app.route("/reset", methods=["POST"])
 def reset_board():
     user_id = session.get("user_id")
-    boards[user_id] = {"board": chess.Board(), "last_access": time.time()}
+    last_active[user_id] = time.time()  # Update last active time
+    boards[user_id] = chess.Board()  # Reset user's board
     return jsonify({"status": "success"})
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
